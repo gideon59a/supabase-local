@@ -8,6 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/admin">Overview</Link>
         <Link href="/admin/providers">Providers</Link>
         <Link href="/admin/items">Items</Link>
+        <Link href="/admin/categories">Categories &amp; fields</Link>
       </nav>
       {children}
     </>

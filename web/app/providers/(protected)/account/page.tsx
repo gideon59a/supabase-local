@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireProvider } from "@/lib/auth";
+import { providerFieldsFor } from "@/lib/providerFields";
 import { Flash } from "@/components/Flash";
 import { MfaSetup } from "@/components/MfaSetup";
+import { ProviderFieldInputs } from "@/components/ProviderFieldInputs";
 import { changePassword, savePrivateData } from "../actions";
 
 export default async function AccountPage({ searchParams }: PageProps<"/providers/account">) {
@@ -19,29 +21,13 @@ export default async function AccountPage({ searchParams }: PageProps<"/provider
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Private details</h2>
-        <p className="muted">Only you and the site admins can see these. They are never shown publicly.</p>
+        <p className="muted">
+          Only you and the site admins can see these. They are never shown publicly.{" "}
+          <Link href="/providers/help/account">What does each field mean?</Link>
+        </p>
         {profile ? (
           <form action={savePrivateData} className="form">
-            <label>
-              Full legal name
-              <input name="full_legal_name" defaultValue={priv?.full_legal_name ?? ""} maxLength={200} />
-            </label>
-            <label>
-              Date of birth
-              <input name="date_of_birth" type="date" defaultValue={priv?.date_of_birth ?? ""} />
-            </label>
-            <label>
-              National ID / passport number
-              <input name="national_id" defaultValue={priv?.national_id ?? ""} maxLength={50} />
-            </label>
-            <label>
-              Private phone
-              <input name="phone_private" type="tel" defaultValue={priv?.phone_private ?? ""} maxLength={30} />
-            </label>
-            <label>
-              Address
-              <textarea name="address" defaultValue={priv?.address ?? ""} maxLength={500} />
-            </label>
+            <ProviderFieldInputs defs={providerFieldsFor("provider_private")} values={priv} />
             <button className="btn btn-primary">Save private details</button>
           </form>
         ) : (

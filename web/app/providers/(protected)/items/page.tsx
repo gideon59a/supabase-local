@@ -11,7 +11,7 @@ export default async function MyItemsPage({ searchParams }: PageProps<"/provider
 
   const { data: items } = await supabase
     .from("items")
-    .select("id, title, price, currency, is_published, is_hidden_by_admin, updated_at")
+    .select("id, title, price, currency, is_published, is_hidden_by_admin, updated_at, categories(name)")
     .eq("provider_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -24,17 +24,18 @@ export default async function MyItemsPage({ searchParams }: PageProps<"/provider
       <Flash error={error} message={message} />
 
       {!items?.length ? (
-        <p className="muted">No items yet.</p>
+        <p className="muted">No items yet. <Link href="/providers/help/fields">See the categories you can use</Link>.</p>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Title</th><th>Price</th><th>Visibility</th><th></th></tr>
+              <tr><th>Title</th><th>Category</th><th>Price</th><th>Visibility</th><th></th></tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.title}</td>
+                  <td>{item.categories?.name}</td>
                   <td>{formatPrice(item.price, item.currency)}</td>
                   <td>
                     {item.is_hidden_by_admin ? "Hidden by admin" : item.is_published ? "Published" : "Draft"}

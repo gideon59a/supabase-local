@@ -17,7 +17,7 @@ export default async function AdminProvidersPage({ searchParams }: PageProps<"/a
 
   let query = supabase
     .from("providers")
-    .select("id, display_name, category, city, status, created_at")
+    .select("id, display_name, city, status, created_at, categories(name)")
     .order("created_at", { ascending: false });
   if (FILTERS.includes(status as Status)) query = query.eq("status", status as Status);
   const { data: providers } = await query;
@@ -45,7 +45,7 @@ export default async function AdminProvidersPage({ searchParams }: PageProps<"/a
               {providers.map((p) => (
                 <tr key={p.id}>
                   <td><Link href={`/admin/providers/${p.id}`}>{p.display_name}</Link></td>
-                  <td>{p.category}</td>
+                  <td>{p.categories?.name}</td>
                   <td>{p.city}</td>
                   <td><StatusBadge status={p.status} /></td>
                   <td>{new Date(p.created_at).toLocaleDateString()}</td>

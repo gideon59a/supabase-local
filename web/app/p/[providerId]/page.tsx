@@ -9,7 +9,9 @@ export default async function ProviderPublicPage({ params }: PageProps<"/p/[prov
 
   const { data: p } = await supabase
     .from("providers")
-    .select("id, display_name, category, city, description, phone_public, items(id, title, price, currency, image_path)")
+    .select(
+      "id, display_name, city, description, phone_public, categories(name), items(id, title, price, currency, image_path)",
+    )
     .eq("id", providerId)
     .eq("status", "approved")
     .eq("items.is_published", true)
@@ -21,7 +23,7 @@ export default async function ProviderPublicPage({ params }: PageProps<"/p/[prov
     <div className="stack">
       <div>
         <h1 style={{ marginBottom: 4 }}>{p.display_name}</h1>
-        <div className="muted">{[p.category, p.city, p.phone_public].filter(Boolean).join(" · ")}</div>
+        <div className="muted">{[p.categories?.name, p.city, p.phone_public].filter(Boolean).join(" · ")}</div>
       </div>
       {p.description && <p style={{ whiteSpace: "pre-wrap" }}>{p.description}</p>}
       <h2>Items</h2>

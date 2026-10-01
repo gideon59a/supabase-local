@@ -10,6 +10,8 @@ export default function ProviderAreaLayout({ children }: { children: React.React
         <Link href="/providers/profile">Public profile</Link>
         <Link href="/providers/account">Account &amp; security</Link>
         <Link href="/providers/items">My items</Link>
+        <Link href="/providers/help/account">Account help</Link>
+        <Link href="/providers/help/fields">Item field help</Link>
       </nav>
       {children}
     </>

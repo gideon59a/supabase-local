@@ -82,6 +82,8 @@ API keys and JWT secrets are shared defaults. Do not use in production
 
 ## Demo app: Provider Marketplace
 
+> **Instructions for people using or developing the app are in [howto/](howto/README.md)**: developer, admin, provider guides and the categories & fields rules.
+
 A Next.js app (`web/`) on top of the local Supabase stack (`supabase/`).
 
 ### Run it
@@ -122,20 +124,24 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
 
 | Who | Route | Purpose |
 |---|---|---|
-| Public | `/` | Approved providers and their published items |
+| Public | `/` | Search, latest items, a chip per category |
 | | `/p/[providerId]` | A provider's public page |
 | | `/items/[itemId]` | Item details |
+| | `/c/[slug]` | One category with a filter sidebar built from its filterable fields |
 | Provider | `/providers` | Landing: join / log in |
 | | `/providers/signup`, `/providers/login` | Account creation and login |
 | | `/providers/dashboard` | Approval status, admin note |
 | | `/providers/profile` | Public profile (create / edit) |
 | | `/providers/account` | Private details, change password, two-factor (authenticator app) |
-| | `/providers/items`, `.../new`, `.../[itemId]/edit` | Manage items, with image upload |
+| | `/providers/items`, `.../new?category=`, `.../[itemId]/edit` | Manage items: pick a category, fill its fields, image upload |
+| | `/providers/help/fields` | Every category and its product fields explained (generated from the definitions) |
+| | `/providers/help/account` | Every profile / private-details field explained (generated from the catalog) |
 | Admin | `/admin/login` | Admin login (non-admins are refused) |
 | | `/admin` | Counts per status |
 | | `/admin/providers[?status=]` | Provider list |
 | | `/admin/providers/[providerId]` | Full details incl. private data; approve / deny / suspend / delete; hide / delete items |
 | | `/admin/items` | All items; hide / delete |
+| | `/admin/categories`, `.../[categoryId]`, `.../fields/[fieldId]` | Categories and their fields: add, edit, reorder, deactivate, preview |
 | Shared | `/auth/callback`, `/auth/mfa`, `/auth/signout` | Email-link login, two-factor step, sign out |
 
 ### Supabase features used
@@ -148,6 +154,8 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
   - admins are listed in the `admins` table; policies call `public.is_admin()`
 - **Auth** - email + password, optional email confirmation (PKCE, via `/auth/callback`), TOTP two-factor, admin API (delete user)
 - **Storage** - public bucket `item-images`, each provider may write only in the folder named after their user id
+- **Admin-defined product fields** - `categories` + `field_definitions` tables; values in `items.attributes` (JSONB), validated by a trigger; `search_items()` RPC for filtering. See [howto/categories-and-fields.md](howto/categories-and-fields.md)
+- **Code-defined provider fields** - the profile and private-details forms are generated from one catalog, `web/lib/providerFields.ts`. See [howto/provider-fields.md](howto/provider-fields.md)
 - **Generated types** - `npm run db:types` regenerates `web/lib/database.types.ts` after schema changes
 - **Two keys** - the *publishable* key (RLS applies) is used everywhere; the *secret* key (bypasses RLS) only in [`web/lib/supabase/admin.ts`](web/lib/supabase/admin.ts) for deleting users and reading emails
 

@@ -2,6 +2,10 @@
 .branches
 .temp
 
+# Data dumps taken before a migration (see howto/schema-changes.md). These contain real user emails,
+# password hashes and session tokens - never commit them, especially since this repo is public.
+snapshots/
+
 # dotenvx
 .env.keys
 .env.local

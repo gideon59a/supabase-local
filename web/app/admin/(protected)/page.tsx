@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
+import { Flash } from "@/components/Flash";
 
-export default async function AdminOverviewPage() {
+export default async function AdminOverviewPage({ searchParams }: PageProps<"/admin">) {
+  const { error, message } = (await searchParams) as { error?: string; message?: string };
   const { supabase } = await requireAdmin("/admin");
 
   const { data: providers } = await supabase.from("providers").select("status");
@@ -13,6 +15,7 @@ export default async function AdminOverviewPage() {
   return (
     <div className="stack">
       <h1>Admin</h1>
+      <Flash error={error} message={message} />
       {counts.pending > 0 && (
         <p className="flash flash-ok">
           {counts.pending} provider(s) waiting for review.{" "}

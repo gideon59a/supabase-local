@@ -31,11 +31,15 @@ export async function setProviderStatus(providerId: string, formData: FormData) 
 
 // Deletes the provider's login account. The database cascades to providers,
 // provider_private and items. Deleting auth users requires the secret key.
+//
+// An admin can also have their own provider profile (same auth user, two
+// roles). Deleting that account here would delete their admin login too (the
+// admins row cascades from auth.users), so for providerId === the caller's
+// own id this instead deletes only the providers row - the provider_private
+// and items cascades below still apply (providers.id is the FK target, not
+// auth.users), but the login and admin access are left alone.
 export async function deleteProvider(providerId: string) {
-  const { user } = await requireAdmin(`/admin/providers/${providerId}`);
-  if (providerId === user.id) {
-    redirectWithError(`/admin/providers/${providerId}`, "You cannot delete your own account here.");
-  }
+  const { supabase, user } = await requireAdmin(`/admin/providers/${providerId}`);
 
   const admin = createAdminClient();
 
@@ -43,6 +47,13 @@ export async function deleteProvider(providerId: string) {
   const { data: files } = await admin.storage.from(BUCKET).list(providerId, { limit: 1000 });
   if (files?.length) {
     await admin.storage.from(BUCKET).remove(files.map((f) => `${providerId}/${f.name}`));
+  }
+
+  if (providerId === user.id) {
+    const { error } = await supabase.from("providers").delete().eq("id", providerId);
+    if (error) redirectWithError(`/admin/providers/${providerId}`, error.message);
+    revalidatePath("/", "layout");
+    redirectWithMessage("/admin/providers", "Provider profile deleted. Your admin login was kept.");
   }
 
   const { error } = await admin.auth.admin.deleteUser(providerId);

@@ -1,52 +1,43 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { formatPrice, itemImageUrl } from "@/lib/utils";
+import { ItemCard, type ItemCardData } from "@/components/ItemCard";
 
-export default async function HomePage() {
+const ITEM_CARD = "id, title, price, currency, image_path, providers(id, display_name), categories(name)";
+
+export default async function HomePage({ searchParams }: PageProps<"/">) {
+  const { q } = (await searchParams) as { q?: string };
   const supabase = await createClient();
 
-  // RLS already hides unapproved providers and unpublished items from visitors.
-  // The explicit filters keep this page public-only even for logged-in
-  // providers/admins, whose own policies let them see more rows.
-  const { data: providers } = await supabase
-    .from("providers")
-    .select("id, display_name, category, city, items(id, title, price, currency, image_path)")
-    .eq("status", "approved")
-    .eq("items.is_published", true)
-    .eq("items.is_hidden_by_admin", false)
-    .order("display_name");
+  const { data: categories } = await supabase
+    .from("categories").select("slug, name").eq("is_active", true).order("sort_order").order("name");
+
+  // search_items() (a Postgres function) returns only public items; embedding
+  // providers/categories works on its result like on a table.
+  const { data: items } = await supabase.rpc("search_items", { p_query: q ?? undefined, p_limit: 24 }).select(ITEM_CARD);
 
   return (
     <div className="stack">
-      <h1>Browse providers</h1>
-      {!providers?.length ? (
+      <h1>Browse</h1>
+      <form method="get" className="row">
+        <input name="q" defaultValue={q ?? ""} placeholder="Search all items…" style={{ flex: 1, minWidth: 200 }} />
+        <button className="btn btn-primary">Search</button>
+      </form>
+
+      <nav className="chips">
+        {categories?.map((c) => (
+          <Link key={c.slug} href={`/c/${c.slug}`}>{c.name}</Link>
+        ))}
+      </nav>
+
+      <h2>{q ? `Results for “${q}”` : "Latest items"}</h2>
+      {!items?.length ? (
         <p className="muted">
-          No approved providers yet. <Link href="/providers">Become a provider</Link>.
+          {q ? "Nothing found." : "No items yet."} <Link href="/providers">Become a provider</Link>.
         </p>
       ) : (
-        providers.map((p) => (
-          <section key={p.id} className="card stack">
-            <div>
-              <Link href={`/p/${p.id}`} style={{ fontSize: 20, fontWeight: 700 }}>{p.display_name}</Link>
-              <div className="muted">{[p.category, p.city].filter(Boolean).join(" · ")}</div>
-            </div>
-            {p.items.length > 0 && (
-              <div className="grid">
-                {p.items.map((item) => {
-                  const img = itemImageUrl(item.image_path);
-                  return (
-                    <Link key={item.id} href={`/items/${item.id}`} style={{ textDecoration: "none" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {img && <img src={img} alt="" className="item-img" />}
-                      <div style={{ fontWeight: 600 }}>{item.title}</div>
-                      <div className="muted">{formatPrice(item.price, item.currency)}</div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        ))
+        <div className="grid">
+          {(items as unknown as ItemCardData[]).map((item) => <ItemCard key={item.id} item={item} />)}
+        </div>
       )}
     </div>
   );

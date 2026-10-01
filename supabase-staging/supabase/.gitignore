@@ -1,0 +1,12 @@
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
+
+# Synced from ../../supabase/migrations/ before each staging run - see howto/schema-changes.md.
+# Not tracked here so there is one source of truth for migrations.
+migrations/

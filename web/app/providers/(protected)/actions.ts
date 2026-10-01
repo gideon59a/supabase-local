@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireProvider } from "@/lib/auth";
 import { field, redirectWithError, redirectWithMessage } from "@/lib/utils";
+import { asAttributes, readAttributes } from "@/lib/fields";
+import { ProviderFieldError, readProviderFields } from "@/lib/providerFields";
 
 type Supabase = Awaited<ReturnType<typeof requireProvider>>["supabase"];
 
@@ -19,21 +21,29 @@ const IMAGE_TYPES: Record<string, string> = {
 export async function saveProfile(formData: FormData) {
   const { supabase, user } = await requireProvider("/providers/profile");
 
-  const displayName = field(formData, "display_name");
-  if (!displayName || displayName.length < 2) {
-    redirectWithError("/providers/profile", "Display name must be at least 2 characters.");
+  // Fields come from the catalog in lib/providerFields.ts; add a field there
+  // (plus a migration for the column) rather than here.
+  let values: Record<string, string | null>;
+  try {
+    values = readProviderFields(formData, "providers");
+  } catch (e) {
+    redirectWithError("/providers/profile", e instanceof ProviderFieldError ? e.message : "Invalid input.");
+  }
+
+  // category_id must be a real row in categories (friendly error here); whether
+  // it's currently active is enforced by the providers_guard trigger instead,
+  // so re-saving the rest of the form doesn't break after a category is deactivated.
+  const categoryId = field(formData, "category_id");
+  if (categoryId) {
+    const { data: category } = await supabase.from("categories").select("id").eq("id", categoryId).maybeSingle();
+    if (!category) redirectWithError("/providers/profile", "Choose a valid category.");
   }
 
   // Upsert = insert the first time, update afterwards. status is not sent:
   // the providers_guard trigger forces 'pending' and blocks self-approval.
-  const { error } = await supabase.from("providers").upsert({
-    id: user.id,
-    display_name: displayName,
-    category: field(formData, "category"),
-    city: field(formData, "city"),
-    phone_public: field(formData, "phone_public"),
-    description: field(formData, "description"),
-  });
+  const { error } = await supabase
+    .from("providers")
+    .upsert({ id: user.id, ...values, category_id: categoryId } as never);
   if (error) redirectWithError("/providers/profile", error.message);
 
   revalidatePath("/", "layout");
@@ -45,14 +55,14 @@ export async function saveProfile(formData: FormData) {
 export async function savePrivateData(formData: FormData) {
   const { supabase, user } = await requireProvider("/providers/account");
 
-  const { error } = await supabase.from("provider_private").upsert({
-    provider_id: user.id,
-    full_legal_name: field(formData, "full_legal_name"),
-    date_of_birth: field(formData, "date_of_birth"),
-    national_id: field(formData, "national_id"),
-    phone_private: field(formData, "phone_private"),
-    address: field(formData, "address"),
-  });
+  let values: Record<string, string | null>;
+  try {
+    values = readProviderFields(formData, "provider_private");
+  } catch (e) {
+    redirectWithError("/providers/account", e instanceof ProviderFieldError ? e.message : "Invalid input.");
+  }
+
+  const { error } = await supabase.from("provider_private").upsert({ provider_id: user.id, ...values } as never);
   if (error) redirectWithError("/providers/account", error.message);
 
   redirectWithMessage("/providers/account", "Private details saved.");
@@ -93,6 +103,15 @@ function readItemFields(formData: FormData, backTo: string) {
   };
 }
 
+// The category chosen in the form plus its field definitions.
+async function loadCategory(supabase: Supabase, formData: FormData) {
+  const categoryId = field(formData, "category_id");
+  if (!categoryId) return null;
+  const { data } = await supabase
+    .from("categories").select("id, slug, field_definitions(*)").eq("id", categoryId).maybeSingle();
+  return data;
+}
+
 // Uploads the optional image to Storage at '<user id>/<random>.<ext>'.
 // Storage RLS only allows writing inside the user's own folder.
 async function uploadImage(supabase: Supabase, userId: string, formData: FormData, backTo: string) {
@@ -110,16 +129,23 @@ async function uploadImage(supabase: Supabase, userId: string, formData: FormDat
 }
 
 export async function createItem(formData: FormData) {
-  const backTo = "/providers/items/new";
-  const { supabase, user } = await requireProvider(backTo);
+  const { supabase, user } = await requireProvider("/providers/items/new");
 
   const { data: profile } = await supabase.from("providers").select("id").eq("id", user.id).maybeSingle();
   if (!profile) redirectWithError("/providers/profile", "Create your profile before adding items.");
 
+  const category = await loadCategory(supabase, formData);
+  if (!category) redirectWithError("/providers/items/new", "Choose a category.");
+  const backTo = `/providers/items/new?category=${category.slug}`;
+
   const fields = readItemFields(formData, backTo);
+  // Validated by the items_validate_attributes trigger; its message is shown on error.
+  const attributes = readAttributes(formData, category.field_definitions.filter((d) => d.is_active));
   const imagePath = await uploadImage(supabase, user.id, formData, backTo);
 
-  const { error } = await supabase.from("items").insert({ ...fields, image_path: imagePath });
+  const { error } = await supabase
+    .from("items")
+    .insert({ ...fields, category_id: category.id, attributes, image_path: imagePath });
   if (error) {
     if (imagePath) await supabase.storage.from(BUCKET).remove([imagePath]);
     redirectWithError(backTo, error.message);
@@ -130,20 +156,40 @@ export async function createItem(formData: FormData) {
 }
 
 export async function updateItem(itemId: string, formData: FormData) {
-  const backTo = `/providers/items/${itemId}/edit`;
+  let backTo = `/providers/items/${itemId}/edit`;
   const { supabase, user } = await requireProvider(backTo);
 
   // RLS returns nothing if this item belongs to someone else.
   const { data: item } = await supabase
-    .from("items").select("image_path").eq("id", itemId).eq("provider_id", user.id).maybeSingle();
+    .from("items")
+    .select("image_path, category_id, attributes")
+    .eq("id", itemId)
+    .eq("provider_id", user.id)
+    .maybeSingle();
   if (!item) redirectWithError("/providers/items", "Item not found.");
 
+  const category = await loadCategory(supabase, formData);
+  if (!category) redirectWithError(backTo, "Choose a category.");
+  const sameCategory = category.id === item.category_id;
+  if (!sameCategory) backTo += `?category=${category.slug}`;
+
   const fields = readItemFields(formData, backTo);
+  const defs = category.field_definitions;
+  const attributes = readAttributes(formData, defs.filter((d) => d.is_active));
+  if (sameCategory) {
+    // Keep values of deactivated fields (they are hidden, not deleted).
+    const old = asAttributes(item.attributes);
+    for (const d of defs) if (!d.is_active && d.key in old) attributes[d.key] = old[d.key];
+  }
+
   const newImage = await uploadImage(supabase, user.id, formData, backTo);
   const removeImage = formData.get("remove_image") === "on";
   const imagePath = newImage ?? (removeImage ? null : item.image_path);
 
-  const { error } = await supabase.from("items").update({ ...fields, image_path: imagePath }).eq("id", itemId);
+  const { error } = await supabase
+    .from("items")
+    .update({ ...fields, category_id: category.id, attributes, image_path: imagePath })
+    .eq("id", itemId);
   if (error) {
     if (newImage) await supabase.storage.from(BUCKET).remove([newImage]);
     redirectWithError(backTo, error.message);
@@ -155,7 +201,6 @@ export async function updateItem(itemId: string, formData: FormData) {
   revalidatePath("/", "layout");
   redirectWithMessage("/providers/items", "Item updated.");
 }
-
 export async function deleteItem(itemId: string) {
   const { supabase, user } = await requireProvider("/providers/items");
 

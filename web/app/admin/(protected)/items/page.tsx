@@ -12,7 +12,7 @@ export default async function AdminItemsPage({ searchParams }: PageProps<"/admin
   // providers(...) follows the items.provider_id foreign key (a join).
   const { data: items } = await supabase
     .from("items")
-    .select("id, title, price, currency, is_published, is_hidden_by_admin, provider_id, providers(display_name)")
+    .select("id, title, price, currency, is_published, is_hidden_by_admin, provider_id, providers(display_name), categories(name)")
     .order("created_at", { ascending: false });
 
   return (
@@ -25,12 +25,13 @@ export default async function AdminItemsPage({ searchParams }: PageProps<"/admin
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Title</th><th>Provider</th><th>Price</th><th>Visibility</th><th></th></tr>
+              <tr><th>Title</th><th>Category</th><th>Provider</th><th>Price</th><th>Visibility</th><th></th></tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.title}</td>
+                  <td>{item.categories?.name}</td>
                   <td><Link href={`/admin/providers/${item.provider_id}`}>{item.providers?.display_name}</Link></td>
                   <td>{formatPrice(item.price, item.currency)}</td>
                   <td>{item.is_hidden_by_admin ? "Hidden" : item.is_published ? "Published" : "Draft"}</td>

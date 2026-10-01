@@ -30,8 +30,21 @@ export async function requireUser(loginPath: string, returnTo: string) {
   return { supabase, user };
 }
 
+// Admin accounts are kept out of the provider area entirely: otherwise an
+// admin could create their own provider profile and (per providers_guard)
+// would still be blocked from self-approving it, but could still use every
+// other provider feature under their admin login. Separate roles, separate
+// logins - sign up as a provider with a different account to test that side.
 export async function requireProvider(returnTo = "/providers/dashboard") {
-  return requireUser("/providers/login", returnTo);
+  const ctx = await requireUser("/providers/login", returnTo);
+  const { data: isAdmin } = await ctx.supabase.rpc("is_admin");
+  if (isAdmin) {
+    redirect(
+      "/admin?error=" +
+        encodeURIComponent("Admin accounts can't use the provider area. Use a separate login to act as a provider."),
+    );
+  }
+  return ctx;
 }
 
 // is_admin() is a Postgres function (see the migration); RLS uses the same check.

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/auth";
+import { Flash } from "@/components/Flash";
 
 export default async function ProvidersLanding() {
-  const { user } = await getSessionUser();
+  const { supabase, user } = await getSessionUser();
+  const { data: isAdmin } = user ? await supabase.rpc("is_admin") : { data: false };
 
   return (
     <div className="stack">
@@ -11,7 +13,17 @@ export default async function ProvidersLanding() {
         Create a provider account, fill in your profile, and publish items. An admin reviews
         new providers before they appear on the public site.
       </p>
-      {user ? (
+      {isAdmin && (
+        <Flash
+          error={
+            `You're signed in as an admin (${user!.email}). Admin and provider are separate logins here - ` +
+            "logging in or signing up below will replace this browser's session with the provider account " +
+            "(your admin login is unaffected). To use both at once, sign out first and use a second browser " +
+            "or a private/incognito window for one of them."
+          }
+        />
+      )}
+      {user && !isAdmin ? (
         <Link href="/providers/dashboard" className="btn btn-primary">Go to your dashboard</Link>
       ) : (
         <div className="row">

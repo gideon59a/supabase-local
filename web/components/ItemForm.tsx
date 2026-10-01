@@ -1,5 +1,7 @@
 import type { Database } from "@/lib/database.types";
+import { asAttributes, type FieldDef } from "@/lib/fields";
 import { itemImageUrl } from "@/lib/utils";
+import { AttributeInputs } from "@/components/AttributeInputs";
 
 type Item = Database["public"]["Tables"]["items"]["Row"];
 
@@ -7,17 +9,27 @@ type Item = Database["public"]["Tables"]["items"]["Row"];
 // React for Server Action forms, so the file input is sent as multipart data.
 export function ItemForm({
   action,
+  category,
+  defs,
   item,
+  keepAttributes = true,
   submitLabel,
 }: {
   action: (formData: FormData) => Promise<void>;
+  category: { id: string; name: string };
+  defs: FieldDef[];
   item?: Item;
+  keepAttributes?: boolean; // false when switching the item to another category
   submitLabel: string;
 }) {
   const imageUrl = itemImageUrl(item?.image_path ?? null);
+  const values = keepAttributes && item ? asAttributes(item.attributes) : {};
 
   return (
     <form action={action} className="form">
+      <input type="hidden" name="category_id" value={category.id} />
+
+      <p className="section-title">Basics</p>
       <label>
         Title *
         <input name="title" defaultValue={item?.title ?? ""} required minLength={2} maxLength={120} />
@@ -36,6 +48,11 @@ export function ItemForm({
           <input name="currency" defaultValue={item?.currency ?? "USD"} minLength={3} maxLength={3} />
         </label>
       </div>
+
+      <p className="section-title">{category.name} details</p>
+      <AttributeInputs defs={defs} values={values} />
+
+      <p className="section-title">Image</p>
       {imageUrl && (
         <div className="stack">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -49,6 +66,7 @@ export function ItemForm({
         {imageUrl ? "Replace image" : "Image"} (JPEG, PNG, WebP or GIF, max 5 MB)
         <input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
       </label>
+
       <label className="check">
         <input type="checkbox" name="is_published" defaultChecked={item?.is_published ?? true} />
         Published (visible on the public site once you are approved)

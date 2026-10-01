@@ -3,20 +3,30 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPrice } from "@/lib/utils";
+import { providerFieldsFor } from "@/lib/providerFields";
 import { Flash } from "@/components/Flash";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { ProviderFieldList } from "@/components/ProviderFieldList";
 import { adminDeleteItem, deleteProvider, setItemHidden, setProviderStatus } from "../../actions";
+
+// display_name is already the page heading, so it is left out of the listed fields below.
+const PUBLIC_FIELDS = providerFieldsFor("providers").filter((f) => f.key !== "display_name");
+const PRIVATE_FIELDS = providerFieldsFor("provider_private");
 
 export default async function AdminProviderPage({ params, searchParams }: PageProps<"/admin/providers/[providerId]">) {
   const { providerId } = await params;
   const { error, message } = (await searchParams) as { error?: string; message?: string };
   const backTo = `/admin/providers/${providerId}`;
-  const { supabase } = await requireAdmin(backTo);
+  const { supabase, user } = await requireAdmin(backTo);
+  const isOwnAccount = providerId === user.id;
 
   // RLS lets admins read everything, including the private table.
   const { data: p } = await supabase.from("providers").select("*").eq("id", providerId).maybeSingle();
   if (!p) notFound();
+  const { data: category } = p.category_id
+    ? await supabase.from("categories").select("name").eq("id", p.category_id).maybeSingle()
+    : { data: null };
   const { data: priv } = await supabase
     .from("provider_private").select("*").eq("provider_id", providerId).maybeSingle();
   const { data: items } = await supabase
@@ -53,12 +63,10 @@ export default async function AdminProviderPage({ params, searchParams }: PagePr
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Public profile</h2>
         <dl className="details">
-          <dt>Category</dt><dd>{p.category}</dd>
-          <dt>City</dt><dd>{p.city}</dd>
-          <dt>Public phone</dt><dd>{p.phone_public}</dd>
-          <dt>Description</dt><dd>{p.description}</dd>
-          <dt>Joined</dt><dd>{new Date(p.created_at).toLocaleString()}</dd>
+          <dt>Category</dt><dd>{category?.name ?? "—"}</dd>
         </dl>
+        <ProviderFieldList defs={PUBLIC_FIELDS} values={p} />
+        <p className="muted" style={{ marginTop: 12 }}>Joined {new Date(p.created_at).toLocaleString()}</p>
       </section>
 
       <section className="card">
@@ -68,12 +76,10 @@ export default async function AdminProviderPage({ params, searchParams }: PagePr
           <dt>Email confirmed</dt><dd>{authUser?.email_confirmed_at ? "yes" : "no"}</dd>
           <dt>Last sign-in</dt><dd>{authUser?.last_sign_in_at ? new Date(authUser.last_sign_in_at).toLocaleString() : ""}</dd>
           <dt>Two-factor</dt><dd>{authUser?.factors?.some((f) => f.status === "verified") ? "enabled" : "off"}</dd>
-          <dt>Legal name</dt><dd>{priv?.full_legal_name}</dd>
-          <dt>Date of birth</dt><dd>{priv?.date_of_birth}</dd>
-          <dt>National ID</dt><dd>{priv?.national_id}</dd>
-          <dt>Private phone</dt><dd>{priv?.phone_private}</dd>
-          <dt>Address</dt><dd>{priv?.address}</dd>
         </dl>
+        <div style={{ marginTop: 12 }}>
+          <ProviderFieldList defs={PRIVATE_FIELDS} values={priv} />
+        </div>
       </section>
 
       <section className="card">
@@ -109,10 +115,20 @@ export default async function AdminProviderPage({ params, searchParams }: PagePr
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Danger zone</h2>
-        <p className="muted">Deletes the login account, profile, private details, items and images. Cannot be undone.</p>
+        <p className="muted">
+          {isOwnAccount
+            ? "Deletes this provider profile, private details, items and images. Your admin login is kept. Cannot be undone."
+            : "Deletes the login account, profile, private details, items and images. Cannot be undone."}
+        </p>
         <form action={deleteProvider.bind(null, providerId)}>
-          <ConfirmButton message={`Permanently delete ${p.display_name} and all their data?`}>
-            Delete provider
+          <ConfirmButton
+            message={
+              isOwnAccount
+                ? `Delete your "${p.display_name}" provider profile? Your admin login will be kept.`
+                : `Permanently delete ${p.display_name} and all their data?`
+            }
+          >
+            {isOwnAccount ? "Delete provider profile" : "Delete provider"}
           </ConfirmButton>
         </form>
       </section>
