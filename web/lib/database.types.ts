@@ -114,13 +114,13 @@ isOneToOne: true
                   ]
                 },"providers": {
                   Row: {
-                    "category_id": string | null,"city": string | null,"created_at": string,"description": string | null,"display_name": string,"id": string,"phone_public": string | null,"status": Database["public"]['Enums']["provider_status"],"status_note": string | null,"updated_at": string
+                    "category_id": string | null,"city": string | null,"created_at": string,"description": string | null,"display_name": string,"id": string,"phone_public": string | null,"status": Database["public"]['Enums']["provider_status"],"status_changed_at": string | null,"status_note": string | null,"status_seen_at": string | null,"updated_at": string
                   }
                   Insert: {
-                    "category_id"?: string | null,"city"?: string | null,"created_at"?: string,"description"?: string | null,"display_name": string,"id": string,"phone_public"?: string | null,"status"?: Database["public"]['Enums']["provider_status"],"status_note"?: string | null,"updated_at"?: string
+                    "category_id"?: string | null,"city"?: string | null,"created_at"?: string,"description"?: string | null,"display_name": string,"id": string,"phone_public"?: string | null,"status"?: Database["public"]['Enums']["provider_status"],"status_changed_at"?: string | null,"status_note"?: string | null,"status_seen_at"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "category_id"?: string | null,"city"?: string | null,"created_at"?: string,"description"?: string | null,"display_name"?: string,"id"?: string,"phone_public"?: string | null,"status"?: Database["public"]['Enums']["provider_status"],"status_note"?: string | null,"updated_at"?: string
+                    "category_id"?: string | null,"city"?: string | null,"created_at"?: string,"description"?: string | null,"display_name"?: string,"id"?: string,"phone_public"?: string | null,"status"?: Database["public"]['Enums']["provider_status"],"status_changed_at"?: string | null,"status_note"?: string | null,"status_seen_at"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {

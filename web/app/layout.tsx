@@ -9,7 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { user } = await getSessionUser();
+  const { supabase, user } = await getSessionUser();
+  // Admins can't meaningfully use the provider area in the same session (see
+  // requireProvider), so the entry point to it is just noise for them here.
+  const { data: isAdmin } = user ? await supabase.rpc("is_admin") : { data: false };
 
   return (
     // suppressHydrationWarning: browser extensions (e.g. LanguageTool) add attributes to <html>.
@@ -19,8 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="container">
             <Link href="/" className="brand">Marketplace</Link>
             <nav>
-              <Link href="/">Browse</Link>
-              <Link href="/providers">For providers</Link>
+              {!isAdmin && <Link href="/providers">For providers</Link>}
             </nav>
             {user && (
               <div className="who">

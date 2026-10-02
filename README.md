@@ -1,6 +1,7 @@
 # supabase-local
 
 A learning project for exploring **Supabase** and its main components, so the knowledge can later be applied (by Claude Code) in real projects.
+The example used is a providers portal with categoried items while considering several real life aspects detailed in the howto md files.
 
 ## Approach
 
@@ -14,7 +15,7 @@ This project uses a **local Supabase stack** (via the Supabase CLI and Docker) r
 - **Auto-generated APIs** – REST (PostgREST) and GraphQL
 - **Realtime** – subscribing to database changes
 - **Storage** – file buckets and access rules
-- **Edge Functions** – server-side TypeScript (Deno)
+- **Edge Functions** – server-side TypeScript (Deno)  - Currently not used in this project
 - **Studio** – the local web dashboard
 
 ## Prerequisites
@@ -32,9 +33,10 @@ supabase stop      # stop the local stack
 ```
 
 
-** IN CMD 
+### Example output
 
-supabase-local>npx supabase start
+```text
+supabase-local> npx supabase start
 ---
 Started supabase local development setup.
 
@@ -76,9 +78,11 @@ Started supabase local development setup.
 │ Secret Key │ <from npx supabase status>                                       │
 │ Region     │ local                                                            │
 ╰────────────┴──────────────────────────────────────────────────────────────────╯
+
 Local dev security notice
-All services bind to 0.0.0.0 (network-accessible, not just localhost)
-API keys and JWT secrets are shared defaults. Do not use in production
+  All services bind to 0.0.0.0 (network-accessible, not just localhost)
+  API keys and JWT secrets are shared defaults. Do not use in production
+```
 
 ## Demo app: Provider Marketplace
 
@@ -116,7 +120,7 @@ Both use the same database: a provider approved at `/admin` in the app shows as 
 
 In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just group pages by audience (they mean nothing to Supabase):
 
-- `/`, `/p/...`, `/items/...` - public pages for visitors
+- `/`, `/p/...`, `/items/...`, `/c/...` - public pages for visitors
 - `/providers/...` - provider sign-up, login, profile, account and items (`web/app/providers/`)
 - `/admin/...` - the site admin area (`web/app/admin/`)
 
@@ -130,7 +134,7 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
 | | `/c/[slug]` | One category with a filter sidebar built from its filterable fields |
 | Provider | `/providers` | Landing: join / log in |
 | | `/providers/signup`, `/providers/login` | Account creation and login |
-| | `/providers/dashboard` | Approval status, admin note |
+| | `/providers/dashboard` | Approval status, admin note, unread-review notice |
 | | `/providers/profile` | Public profile (create / edit) |
 | | `/providers/account` | Private details, change password, two-factor (authenticator app) |
 | | `/providers/items`, `.../new?category=`, `.../[itemId]/edit` | Manage items: pick a category, fill its fields, image upload |
@@ -140,7 +144,7 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
 | | `/admin` | Counts per status |
 | | `/admin/providers[?status=]` | Provider list |
 | | `/admin/providers/[providerId]` | Full details incl. private data; approve / deny / suspend / delete; hide / delete items |
-| | `/admin/items` | All items; hide / delete |
+| | `/admin/items[?provider=][&category=]` | All items, filterable by provider/category; hide / delete |
 | | `/admin/categories`, `.../[categoryId]`, `.../fields/[fieldId]` | Categories and their fields: add, edit, reorder, deactivate, preview |
 | Shared | `/auth/callback`, `/auth/mfa`, `/auth/signout` | Email-link login, two-factor step, sign out |
 
@@ -149,12 +153,12 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
 - **Migrations** - the whole schema is in [`supabase/migrations/`](supabase/migrations/)
 - **Row Level Security** - all access rules live in the database, not the app:
   - visitors see only approved providers and published, non-hidden items
-  - providers read/write only their own rows; they cannot approve themselves (trigger)
+  - providers read/write only their own rows; no self-approval - neither a provider nor an admin acting on their own provider profile can change its status (trigger), only a *different* admin reviewing someone else can
   - `provider_private` is visible only to its owner and admins, and needs **aal2** (two-factor passed) if the owner enrolled two-factor (restrictive policy)
-  - admins are listed in the `admins` table; policies call `public.is_admin()`
+  - admins are listed in the `admins` table; policies call `public.is_admin()`; admin and provider are enforced as separate logins - an admin session is refused the provider area by `requireProvider()`
 - **Auth** - email + password, optional email confirmation (PKCE, via `/auth/callback`), TOTP two-factor, admin API (delete user)
 - **Storage** - public bucket `item-images`, each provider may write only in the folder named after their user id
-- **Admin-defined product fields** - `categories` + `field_definitions` tables; values in `items.attributes` (JSONB), validated by a trigger; `search_items()` RPC for filtering. See [howto/categories-and-fields.md](howto/categories-and-fields.md)
+- **Admin-defined product fields** - `categories` + `field_definitions` tables; item values live in `items.attributes` (JSONB), validated by a trigger; `search_items()` RPC for filtering; a provider's own profile picks its `category_id` from the same `categories` list. See [howto/categories-and-fields.md](howto/categories-and-fields.md)
 - **Code-defined provider fields** - the profile and private-details forms are generated from one catalog, `web/lib/providerFields.ts`. See [howto/provider-fields.md](howto/provider-fields.md)
 - **Generated types** - `npm run db:types` regenerates `web/lib/database.types.ts` after schema changes
 - **Two keys** - the *publishable* key (RLS applies) is used everywhere; the *secret* key (bypasses RLS) only in [`web/lib/supabase/admin.ts`](web/lib/supabase/admin.ts) for deleting users and reading emails
@@ -172,9 +176,11 @@ In Next.js each folder under `web/app/` becomes a URL path, so the prefixes just
 | Table | Contents | Who can access |
 |---|---|---|
 | `admins` | user ids of admins | rows added only via `npm run create-admin` (secret key) |
-| `providers` | public profile + `status` (`pending` / `approved` / `denied` / `suspended`) + admin note | public if approved; owner; admins |
+| `categories` | admin-managed list of product categories (slug, name, active) | public read; admins write |
+| `field_definitions` | per-category fields: label, type, required, options, min/max, filterable | public read; admins write |
+| `providers` | public profile + `category_id` (from `categories`) + `status` (`pending` / `approved` / `denied` / `suspended`) + admin note + review timestamps (`status_changed_at` / `status_seen_at`) | public if approved; owner; admins |
 | `provider_private` | sensitive personal details | owner (aal2 if two-factor is enrolled); admins |
-| `items` | title, description, price, currency, image path, published / hidden flags | public if published, not hidden and provider approved; owner; admins |
+| `items` | title, description, price, currency, image path, `category_id`, `attributes` (JSONB, validated against the category's fields), published / hidden flags | public if published, not hidden and provider approved; owner; admins |
 | storage `item-images` | item images at `<user id>/<file>` | public read; owner writes; owner/admin delete |
 
 Deleting a provider deletes the auth user; the database cascades to their profile, private data and items, and the app removes their images.
@@ -193,12 +199,14 @@ web/
   app/                        routes (see table above); Server Actions in actions.ts files
   components/                 forms, two-factor setup/challenge, badges
   scripts/create-admin.mjs    create or promote an admin user
+  scripts/verify-schema.mjs   schema/data consistency audit (npm run verify-schema)
 ```
 
 **How it was verified**
 - 38 RLS checks straight against the Supabase API (anon, two providers, admin): self-approval blocked, cross-provider reads/writes blocked, storage folder isolation, two-factor (aal1 vs aal2) on private data, cascade delete.
 - 25 page checks: every route renders for the right user; protected routes redirect anonymous users, non-admins and users who still need the two-factor step.
 - 26 end-to-end form flows: sign-up → confirmation email in Mailpit (tested with confirmation on) → profile → private data → item with image → edit / remove image → admin approval → public page → delete item → delete provider → sign out.
+- Later additions (categories & fields, provider `category_id`, admin/provider role separation) were verified by `npm run verify-schema` (see `web/scripts/verify-schema.mjs`) plus targeted trigger tests run directly against Postgres, not a re-run of the full suite above.
 
 **Lessons learned while building**
 - `getClaims()` only verifies the JWT locally, so a deleted user's token keeps working until it expires. Page guards use `getUser()` (asks the Auth server) instead.
@@ -208,3 +216,4 @@ web/
 **Known limitations**
 - The image bucket is public: anyone with an image URL can view it, even for draft items.
 - Services bind to `0.0.0.0` (see the security notice above); fine for local learning only.
+- Admin and provider are separate logins, enforced per browser session (one cookie jar = one identity): to act as both at once, use two browsers or a private/incognito window.
